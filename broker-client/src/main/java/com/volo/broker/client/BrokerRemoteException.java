@@ -25,4 +25,8 @@ public class BrokerRemoteException extends BrokerClientException {
     public Map<String, String> details() {
         return details;
     }
+
+    public boolean isResourceExhausted() {
+        return errorCode == ErrorCode.RESOURCE_EXHAUSTED;
+    }
 }

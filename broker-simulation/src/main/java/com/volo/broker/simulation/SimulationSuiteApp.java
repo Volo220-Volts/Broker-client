@@ -17,10 +17,10 @@ public class SimulationSuiteApp {
     // >>> SELECT TARGET BROKER HERE <<<
     // Set to BrokerType.CUSTOM or BrokerType.RABBITMQ to execute the simulation suite
     // ====================================================================================
-    public static final BrokerType SELECTED_BROKER = BrokerType.RABBITMQ;
+    public static final BrokerType SELECTED_BROKER = BrokerType.CUSTOM;
 
     // Set to "ALL" to run all 12 scenarios sequentially, or specify a scenario prefix (e.g. "S1", "S2", "S4")
-    public static final String SCENARIO_FILTER = "S7";
+    public static final String SCENARIO_FILTER = "S5_2";
 
     public static Duration benchDuration = Duration.ZERO;
 
@@ -162,7 +162,7 @@ public class SimulationSuiteApp {
         scenarios.add(new BenchmarkScenario(
                 "S5_2_LargePayloadBandwidth",
                 "Throughput bandwidth saturation and memory copying test (2 queues, 5k msgs = 5 GB, 1 MiB payload)",
-                buildConfig(createQueues("orders.s5_2.", 2, 5, 5, 250, 10, false, true, true), 1024 * 1024, 32, 16, Duration.ofSeconds(120))
+                buildConfig(createQueues("orders.s5_2.", 2, 5, 5, 1500, 10, false, true, true), 1024 * 1024, 32, 16, Duration.ofSeconds(120))
         ));
 
         // S6.1: Hotspot Contention (1 queue, 50 pub, 20 cons, 100k msg, 2 KiB, durable=false, ack=true, prefetch=100)
@@ -193,11 +193,11 @@ public class SimulationSuiteApp {
                 buildConfig(createQueues("orders.s7_2.", 5, 10, 5, 1_000, 500, false, true, true), 2048, 64, 32, Duration.ofSeconds(60))
         ));
 
-        // S8: Producer Surge & Lag (10 queues, 50 pub, 2 cons, 300k msg, 2 KiB, durable=true, ack=true, prefetch=200)
+        // S8: Producer Surge & Lag (10 queues, 50 pub, 2 cons, 300k msg, 2 KiB, durable=true, ack=true, prefetch=200, FlowControl: HWM 20k, LWM 5k)
         scenarios.add(new BenchmarkScenario(
                 "S8_ProducerSurge_Backpressure",
-                "Backpressure stress test with severe producer/consumer imbalance (10 queues, 50 pubs vs 2 cons, 300k msgs)",
-                buildConfig(createQueues("orders.s8.", 10, 50, 2, 600, 200, true, true, true), 2048, 64, 32, Duration.ofSeconds(180))
+                "Backpressure stress test with severe producer/consumer imbalance (10 queues, 50 pubs vs 2 cons, 300k msgs, HWM=20k, LWM=5k)",
+                buildConfig(createQueuesWithFlowControl("orders.s8.", 10, 50, 2, 600, 200, true, true, true, 20_000, 5_000, 30_000), 2048, 64, 32, Duration.ofSeconds(180))
         ));
 
         return scenarios;
@@ -225,6 +225,37 @@ public class SimulationSuiteApp {
                     .durable(durable)
                     .waitForPublishAck(waitForPublishAck)
                     .waitForConsumerAck(waitForConsumerAck)
+                    .build());
+        }
+        return queues;
+    }
+
+    private static List<QueueTarget> createQueuesWithFlowControl(
+            String prefix,
+            int queueCount,
+            int pubsPerQueue,
+            int consPerQueue,
+            int msgsPerPublisher,
+            int prefetch,
+            boolean durable,
+            boolean waitForPublishAck,
+            boolean waitForConsumerAck,
+            int highWatermarkMsgs,
+            int lowWatermarkMsgs,
+            long maxBlockMs
+    ) {
+        List<QueueTarget> queues = new ArrayList<>(queueCount);
+        for (int i = 0; i < queueCount; i++) {
+            queues.add(QueueTarget.builder()
+                    .queueName(prefix + i)
+                    .publishers(pubsPerQueue)
+                    .consumers(consPerQueue)
+                    .messagesPerPublisher(msgsPerPublisher)
+                    .consumerPrefetch(prefetch)
+                    .durable(durable)
+                    .waitForPublishAck(waitForPublishAck)
+                    .waitForConsumerAck(waitForConsumerAck)
+                    .flowControl(highWatermarkMsgs, lowWatermarkMsgs, maxBlockMs)
                     .build());
         }
         return queues;

@@ -28,6 +28,13 @@ public final class QueueSettingsBuilder {
     private int prefetchCount = 10;
     private ConsumerSelectionStrategy consumerSelectionStrategy = ConsumerSelectionStrategy.ROUND_ROBIN;
 
+    private boolean flowControlEnabled;
+    private int highWatermarkMessages;
+    private int lowWatermarkMessages;
+    private long highWatermarkBytes;
+    private long lowWatermarkBytes;
+    private long maxBlockMs;
+
     private QueueSettingsBuilder() {
     }
 
@@ -214,10 +221,84 @@ public final class QueueSettingsBuilder {
         return this;
     }
 
+    public QueueSettingsBuilder flowControl(int highWatermarkMessages, int lowWatermarkMessages) {
+        return flowControl(highWatermarkMessages, lowWatermarkMessages, 0);
+    }
+
+    public QueueSettingsBuilder flowControl(int highWatermarkMessages, int lowWatermarkMessages, long maxBlockMs) {
+        if (highWatermarkMessages <= 0) {
+            throw new IllegalArgumentException("highWatermarkMessages must be greater than zero");
+        }
+        if (lowWatermarkMessages < 0) {
+            throw new IllegalArgumentException("lowWatermarkMessages cannot be negative");
+        }
+        if (highWatermarkMessages <= lowWatermarkMessages) {
+            throw new IllegalArgumentException("highWatermarkMessages must be greater than lowWatermarkMessages");
+        }
+        if (maxBlockMs < 0) {
+            throw new IllegalArgumentException("maxBlockMs cannot be negative");
+        }
+
+        this.flowControlEnabled = true;
+        this.highWatermarkMessages = highWatermarkMessages;
+        this.lowWatermarkMessages = lowWatermarkMessages;
+        this.maxBlockMs = maxBlockMs;
+        return this;
+    }
+
+    public QueueSettingsBuilder flowControlBytes(long highWatermarkBytes, long lowWatermarkBytes) {
+        return flowControlBytes(highWatermarkBytes, lowWatermarkBytes, 0);
+    }
+
+    public QueueSettingsBuilder flowControlBytes(long highWatermarkBytes, long lowWatermarkBytes, long maxBlockMs) {
+        if (highWatermarkBytes <= 0) {
+            throw new IllegalArgumentException("highWatermarkBytes must be greater than zero");
+        }
+        if (lowWatermarkBytes < 0) {
+            throw new IllegalArgumentException("lowWatermarkBytes cannot be negative");
+        }
+        if (highWatermarkBytes <= lowWatermarkBytes) {
+            throw new IllegalArgumentException("highWatermarkBytes must be greater than lowWatermarkBytes");
+        }
+        if (maxBlockMs < 0) {
+            throw new IllegalArgumentException("maxBlockMs cannot be negative");
+        }
+
+        this.flowControlEnabled = true;
+        this.highWatermarkBytes = highWatermarkBytes;
+        this.lowWatermarkBytes = lowWatermarkBytes;
+        this.maxBlockMs = maxBlockMs;
+        return this;
+    }
+
+    public QueueSettingsBuilder flowControl(FlowControlPolicy policy) {
+        if (policy == null || !policy.getEnabled()) {
+            return flowControlDisabled();
+        }
+
+        this.flowControlEnabled = true;
+        this.highWatermarkMessages = policy.getHighWatermarkMessages();
+        this.lowWatermarkMessages = policy.getLowWatermarkMessages();
+        this.highWatermarkBytes = policy.getHighWatermarkBytes();
+        this.lowWatermarkBytes = policy.getLowWatermarkBytes();
+        this.maxBlockMs = policy.getMaxBlockMs();
+        return this;
+    }
+
+    public QueueSettingsBuilder flowControlDisabled() {
+        this.flowControlEnabled = false;
+        this.highWatermarkMessages = 0;
+        this.lowWatermarkMessages = 0;
+        this.highWatermarkBytes = 0;
+        this.lowWatermarkBytes = 0;
+        this.maxBlockMs = 0;
+        return this;
+    }
+
     public QueueSettings build() {
         validateCompatibility();
 
-        return QueueSettings.newBuilder()
+        QueueSettings.Builder builder = QueueSettings.newBuilder()
                 .setPersistenceMode(persistenceMode)
                 .setPublishAckMode(publishAckMode)
                 .setConsumerAckMode(consumerAckMode)
@@ -246,8 +327,20 @@ public final class QueueSettingsBuilder {
                 .setDispatchPolicy(DispatchPolicy.newBuilder()
                         .setPrefetchCount(prefetchCount)
                         .setConsumerSelectionStrategy(consumerSelectionStrategy)
-                        .build())
-                .build();
+                        .build());
+
+        if (flowControlEnabled) {
+            builder.setFlowControlPolicy(FlowControlPolicy.newBuilder()
+                    .setEnabled(true)
+                    .setHighWatermarkMessages(highWatermarkMessages)
+                    .setLowWatermarkMessages(lowWatermarkMessages)
+                    .setHighWatermarkBytes(highWatermarkBytes)
+                    .setLowWatermarkBytes(lowWatermarkBytes)
+                    .setMaxBlockMs(maxBlockMs)
+                    .build());
+        }
+
+        return builder.build();
     }
 
     private void validateCompatibility() {
@@ -262,6 +355,23 @@ public final class QueueSettingsBuilder {
 
         if (autoDelete && durable) {
             throw new IllegalStateException("auto-delete queue cannot be durable");
+        }
+
+        if (flowControlEnabled) {
+            if (highWatermarkMessages > 0 && highWatermarkMessages <= lowWatermarkMessages) {
+                throw new IllegalStateException("highWatermarkMessages must be greater than lowWatermarkMessages");
+            }
+            if (highWatermarkBytes > 0 && highWatermarkBytes <= lowWatermarkBytes) {
+                throw new IllegalStateException("highWatermarkBytes must be greater than lowWatermarkBytes");
+            }
+            if (capacityLimited && maxMessages > 0 && highWatermarkMessages > 0 && highWatermarkMessages >= maxMessages) {
+                throw new IllegalStateException("highWatermarkMessages (" + highWatermarkMessages
+                        + ") must be less than maxMessages (" + maxMessages + ")");
+            }
+            if (capacityLimited && maxBytes > 0 && highWatermarkBytes > 0 && highWatermarkBytes >= maxBytes) {
+                throw new IllegalStateException("highWatermarkBytes (" + highWatermarkBytes
+                        + ") must be less than maxBytes (" + maxBytes + ")");
+            }
         }
     }
 }

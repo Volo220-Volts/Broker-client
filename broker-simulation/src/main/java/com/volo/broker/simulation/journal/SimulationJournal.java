@@ -256,7 +256,11 @@ public final class SimulationJournal implements AutoCloseable {
                     target.durable(),
                     target.durable() ? "PERSISTENT" : "MEMORY_FAST",
                     target.waitForPublishAck(),
-                    target.waitForConsumerAck()
+                    target.waitForConsumerAck(),
+                    target.flowControlEnabled(),
+                    target.highWatermarkMessages(),
+                    target.lowWatermarkMessages(),
+                    target.maxBlockMs()
             ));
         }
 

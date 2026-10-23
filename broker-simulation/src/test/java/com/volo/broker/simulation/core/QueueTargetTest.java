@@ -47,5 +47,21 @@ class QueueTargetTest {
         assertThat(target.waitForPublishAck()).isFalse();
         assertThat(target.waitForConsumerAck()).isFalse();
     }
+
+    @Test
+    void shouldConfigureFlowControl() {
+        QueueTarget target = QueueTarget.builder()
+                .queueName("orders.surge")
+                .publishers(10)
+                .consumers(2)
+                .messagesPerPublisher(1000)
+                .flowControl(20_000, 5_000, 30_000)
+                .build();
+
+        assertThat(target.flowControlEnabled()).isTrue();
+        assertThat(target.highWatermarkMessages()).isEqualTo(20_000);
+        assertThat(target.lowWatermarkMessages()).isEqualTo(5_000);
+        assertThat(target.maxBlockMs()).isEqualTo(30_000);
+    }
 }
 

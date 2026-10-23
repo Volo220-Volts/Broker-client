@@ -12,4 +12,7 @@ public interface PublisherEventListener {
 
     default void onStreamClosed(Throwable reason) {
     }
+
+    default void onFlowControl(boolean blocked, String reason, long timestamp) {
+    }
 }

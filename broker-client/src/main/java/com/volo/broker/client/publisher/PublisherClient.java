@@ -28,6 +28,7 @@ public final class PublisherClient implements MessagePublisher {
 
     private final com.volo.broker.client.internal.NonBlockingStreamSender<PublisherRequest> sender;
     private volatile ScheduledFuture<?> keepAliveTask;
+    private volatile boolean flowBlocked;
 
     public PublisherClient(
             PublisherServiceGrpc.PublisherServiceStub stub,
@@ -97,6 +98,10 @@ public final class PublisherClient implements MessagePublisher {
 
     public int pendingPublishes() {
         return pendingPublishes.size();
+    }
+
+    public boolean isFlowBlocked() {
+        return flowBlocked;
     }
 
     @Override
@@ -183,8 +188,26 @@ public final class PublisherClient implements MessagePublisher {
             return;
         }
 
+        if (response.hasFlow()) {
+            handleFlowControl(response.getFlow());
+            return;
+        }
+
         if (response.hasPong()) {
             return;
+        }
+    }
+
+    private void handleFlowControl(FlowControlNotice flow) {
+        this.flowBlocked = flow.getBlocked();
+        if (flow.getBlocked()) {
+            log.warn("[FLOW CONTROL] Publisher PAUSED by broker. Reason: {}", flow.getReason());
+        } else {
+            log.info("[FLOW CONTROL] Publisher RESUMED by broker. Reason: {}", flow.getReason());
+        }
+        try {
+            options.eventListener().onFlowControl(flow.getBlocked(), flow.getReason(), flow.getTimestamp());
+        } catch (Throwable ignored) {
         }
     }
 

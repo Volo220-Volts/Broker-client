@@ -12,8 +12,31 @@ public record QueueConfigSnapshot(
         boolean durable,
         String storageMode,
         boolean waitForPublishAck,
-        boolean waitForConsumerAck
+        boolean waitForConsumerAck,
+        boolean flowControlEnabled,
+        int highWatermarkMessages,
+        int lowWatermarkMessages,
+        long maxBlockMs
 ) {
+    public QueueConfigSnapshot(
+            int queueIndex,
+            String queueName,
+            int publishers,
+            int consumers,
+            int messagesPerPublisher,
+            long expectedMessages,
+            long expectedBytes,
+            int consumerPrefetch,
+            boolean durable,
+            String storageMode,
+            boolean waitForPublishAck,
+            boolean waitForConsumerAck
+    ) {
+        this(queueIndex, queueName, publishers, consumers, messagesPerPublisher,
+                expectedMessages, expectedBytes, consumerPrefetch, durable, storageMode,
+                waitForPublishAck, waitForConsumerAck, false, 0, 0, 0);
+    }
+
     public QueueConfigSnapshot(
             int queueIndex,
             String queueName,
@@ -27,7 +50,8 @@ public record QueueConfigSnapshot(
             String storageMode
     ) {
         this(queueIndex, queueName, publishers, consumers, messagesPerPublisher,
-                expectedMessages, expectedBytes, consumerPrefetch, durable, storageMode, true, true);
+                expectedMessages, expectedBytes, consumerPrefetch, durable, storageMode,
+                true, true, false, 0, 0, 0);
     }
 
     public String ackMode() {

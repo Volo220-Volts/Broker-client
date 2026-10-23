@@ -9,7 +9,11 @@ public record QueueTarget(
         int consumerPrefetch,
         boolean durable,
         boolean waitForPublishAck,
-        boolean waitForConsumerAck
+        boolean waitForConsumerAck,
+        boolean flowControlEnabled,
+        int highWatermarkMessages,
+        int lowWatermarkMessages,
+        long maxBlockMs
 ) {
     public QueueTarget {
         if (queueName == null || queueName.isBlank()) {
@@ -27,6 +31,34 @@ public record QueueTarget(
         if (consumerPrefetch <= 0) {
             consumerPrefetch = 50;
         }
+        if (flowControlEnabled) {
+            if (highWatermarkMessages <= 0) {
+                throw new IllegalArgumentException("highWatermarkMessages must be greater than zero");
+            }
+            if (lowWatermarkMessages < 0) {
+                throw new IllegalArgumentException("lowWatermarkMessages cannot be negative");
+            }
+            if (highWatermarkMessages <= lowWatermarkMessages) {
+                throw new IllegalArgumentException("highWatermarkMessages must be greater than lowWatermarkMessages");
+            }
+            if (maxBlockMs < 0) {
+                throw new IllegalArgumentException("maxBlockMs cannot be negative");
+            }
+        }
+    }
+
+    public QueueTarget(
+            String queueName,
+            int publishers,
+            int consumers,
+            int messagesPerPublisher,
+            int consumerPrefetch,
+            boolean durable,
+            boolean waitForPublishAck,
+            boolean waitForConsumerAck
+    ) {
+        this(queueName, publishers, consumers, messagesPerPublisher, consumerPrefetch, durable,
+                waitForPublishAck, waitForConsumerAck, false, 0, 0, 0);
     }
 
     public QueueTarget(
@@ -37,7 +69,7 @@ public record QueueTarget(
             int consumerPrefetch,
             boolean durable
     ) {
-        this(queueName, publishers, consumers, messagesPerPublisher, consumerPrefetch, durable, true, true);
+        this(queueName, publishers, consumers, messagesPerPublisher, consumerPrefetch, durable, true, true, false, 0, 0, 0);
     }
 
     public long expectedMessages() {
@@ -57,6 +89,10 @@ public record QueueTarget(
         private boolean durable = true;
         private boolean waitForPublishAck = true;
         private boolean waitForConsumerAck = true;
+        private boolean flowControlEnabled = false;
+        private int highWatermarkMessages = 0;
+        private int lowWatermarkMessages = 0;
+        private long maxBlockMs = 0;
 
         public Builder queueName(String queueName) {
             this.queueName = queueName;
@@ -113,6 +149,26 @@ public record QueueTarget(
             return this;
         }
 
+        public Builder flowControl(int highWatermarkMessages, int lowWatermarkMessages) {
+            return flowControl(highWatermarkMessages, lowWatermarkMessages, 0);
+        }
+
+        public Builder flowControl(int highWatermarkMessages, int lowWatermarkMessages, long maxBlockMs) {
+            this.flowControlEnabled = true;
+            this.highWatermarkMessages = highWatermarkMessages;
+            this.lowWatermarkMessages = lowWatermarkMessages;
+            this.maxBlockMs = maxBlockMs;
+            return this;
+        }
+
+        public Builder flowControlDisabled() {
+            this.flowControlEnabled = false;
+            this.highWatermarkMessages = 0;
+            this.lowWatermarkMessages = 0;
+            this.maxBlockMs = 0;
+            return this;
+        }
+
         public QueueTarget build() {
             return new QueueTarget(
                     queueName,
@@ -122,7 +178,11 @@ public record QueueTarget(
                     consumerPrefetch,
                     durable,
                     waitForPublishAck,
-                    waitForConsumerAck
+                    waitForConsumerAck,
+                    flowControlEnabled,
+                    highWatermarkMessages,
+                    lowWatermarkMessages,
+                    maxBlockMs
             );
         }
     }

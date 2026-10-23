@@ -52,6 +52,14 @@ public final class CustomBrokerAdapter implements BrokerSimulationAdapter {
                 builder.consumerAckNone();
             }
 
+            if (target.flowControlEnabled()) {
+                builder.flowControl(
+                        target.highWatermarkMessages(),
+                        target.lowWatermarkMessages(),
+                        target.maxBlockMs()
+                );
+            }
+
             try {
                 adminClient.queues().deleteQueue(target.queueName());
             } catch (Exception ignored) {
